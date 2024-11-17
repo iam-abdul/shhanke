@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -11,7 +12,7 @@ type Coordinate struct {
 }
 
 const (
-	RefreshRate     time.Duration = 900 * time.Millisecond
+	RefreshRate     time.Duration = 100 * time.Millisecond
 	InputSampleRate time.Duration = 50 * time.Millisecond
 )
 
@@ -29,6 +30,12 @@ type GameState struct {
 	// snake info
 	Fruit Coordinate
 	Snake []Coordinate
+
+	// movement
+	UpVotes    uint
+	DownVotes  uint
+	LeftVotes  uint
+	RightVotes uint
 }
 
 type RefreshTickMsg time.Time
@@ -39,22 +46,12 @@ const rows, cols = 40, 120
 
 func init() {
 
-	snakeInit := make([]Coordinate, 4)
-	snakeInit = append(snakeInit, Coordinate{
-		Row:       rows / 2,
-		Col:       cols / 2,
-		Character: '>',
-	})
-	snakeInit = append(snakeInit, Coordinate{
-		Row:       rows / 2,
-		Col:       cols/2 + 1,
-		Character: '>',
-	})
-	snakeInit = append(snakeInit, Coordinate{
-		Row:       rows / 2,
-		Col:       cols/2 + 2,
-		Character: '>',
-	})
+	snakeInit := make([]Coordinate, 1)
+	snakeInit[0] = Coordinate{
+		Row:       20,
+		Col:       20,
+		Character: '▇',
+	}
 
 	SingleGameState = &GameState{
 		Content: make([][]rune, rows),
@@ -83,21 +80,81 @@ func init() {
 }
 
 func (gs *GameState) updateContent() {
-	// Clear the grid first
-	// for i := range gs.Content {
-	// 	for j := range gs.Content[i] {
-	// 		gs.Content[i][j] = ' ' // Empty space
-	// 	}
-	// }
 
 	// Update the grid with snake positions
 	for _, pos := range gs.Snake {
-		gs.Content[pos.Row][pos.Col] = pos.Character
+		gs.Content[pos.Row][pos.Col] = '▇'
 	}
+}
+
+// Function to find the largest vote and its direction
+func (gs *GameState) getLargestVote() (uint, string) {
+	// Map directions to their respective votes
+	votes := map[string]uint{
+		"Up":    gs.UpVotes,
+		"Down":  gs.DownVotes,
+		"Left":  gs.LeftVotes,
+		"Right": gs.RightVotes,
+	}
+
+	// Iterate to find the largest vote
+	var largestVote uint
+	// default direction
+	var direction string = "Right"
+	for dir, vote := range votes {
+		if vote > largestVote {
+			largestVote = vote
+			direction = dir
+		}
+	}
+
+	return largestVote, direction
+}
+
+func (gs *GameState) MoveSnake() {
+	// this looks at direction votes and updates the snake co ordinates
+	_, direction := gs.getLargestVote()
+	var newHead Coordinate
+
+	currentHead := gs.Snake[0]
+	if direction == "Right" {
+		newHead = Coordinate{
+			Row: currentHead.Row,
+			Col: currentHead.Col + 1,
+		}
+	} else if direction == "Left" {
+		newHead = Coordinate{
+			Row: currentHead.Row,
+			Col: currentHead.Col - 1,
+		}
+	} else if direction == "Up" {
+		newHead = Coordinate{
+			Row: currentHead.Row - 1,
+			Col: currentHead.Col,
+		}
+	} else if direction == "Down" {
+		newHead = Coordinate{
+			Row: currentHead.Row + 1,
+			Col: currentHead.Col,
+		}
+	}
+
+	// Add the new head to the front of the snake
+	gs.Snake = append([]Coordinate{newHead}, gs.Snake...)
+
+	// Remove the last block of the snake to maintain its size
+	// clear the tail character
+	lengthOfSnake := len(gs.Snake)
+	tailOfSnake := gs.Snake[lengthOfSnake-1]
+	gs.Content[tailOfSnake.Row][tailOfSnake.Col] = ' '
+	gs.Snake = gs.Snake[:lengthOfSnake-1]
 
 }
 
 func (gs *GameState) GetContent() string {
+	fmt.Println("head is at ", gs.Snake[0])
+	gs.MoveSnake()
+	gs.updateContent()
 	// Build the string representation of the grid
 	var result string
 	for _, row := range gs.Content {
@@ -106,5 +163,6 @@ func (gs *GameState) GetContent() string {
 		}
 		result += "\n" // Add newline at the end of each row
 	}
+	fmt.Println("the result is ", result)
 	return result
 }
