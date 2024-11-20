@@ -53,6 +53,23 @@ func (T TestMultiplayer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return T, tea.Quit
+
+		case "up":
+			state.SingleGameState.MoveUp()
+			return T, nil
+
+		case "down":
+			state.SingleGameState.MoveDown()
+			return T, nil
+
+		case "left":
+			state.SingleGameState.MoveLeft()
+			return T, nil
+
+		case "right":
+			state.SingleGameState.MoveRight()
+			return T, nil
+
 		default:
 			// gameState := state.GetGameState().Content
 			// state.UpdateGameContent(gameState + msg.String())

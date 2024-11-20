@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,7 +13,7 @@ type Coordinate struct {
 }
 
 const (
-	RefreshRate     time.Duration = 100 * time.Millisecond
+	RefreshRate     time.Duration = 500 * time.Millisecond
 	InputSampleRate time.Duration = 50 * time.Millisecond
 )
 
@@ -31,11 +32,13 @@ type GameState struct {
 	Fruit Coordinate
 	Snake []Coordinate
 
+	LastDirection string
+
 	// movement
-	UpVotes    uint
-	DownVotes  uint
-	LeftVotes  uint
-	RightVotes uint
+	UpVotes    uint32
+	DownVotes  uint32
+	LeftVotes  uint32
+	RightVotes uint32
 }
 
 type RefreshTickMsg time.Time
@@ -54,8 +57,9 @@ func init() {
 	}
 
 	SingleGameState = &GameState{
-		Content: make([][]rune, rows),
-		Snake:   snakeInit,
+		Content:       make([][]rune, rows),
+		Snake:         snakeInit,
+		LastDirection: "Up",
 	}
 
 	for i := range SingleGameState.Content {
@@ -85,12 +89,18 @@ func (gs *GameState) updateContent() {
 	for _, pos := range gs.Snake {
 		gs.Content[pos.Row][pos.Col] = '▇'
 	}
+
+	// reset the votes
+	atomic.StoreUint32(&gs.UpVotes, 0)
+	atomic.StoreUint32(&gs.DownVotes, 0)
+	atomic.StoreUint32(&gs.LeftVotes, 0)
+	atomic.StoreUint32(&gs.RightVotes, 0)
 }
 
 // Function to find the largest vote and its direction
-func (gs *GameState) getLargestVote() (uint, string) {
+func (gs *GameState) getLargestVote() (uint32, string) {
 	// Map directions to their respective votes
-	votes := map[string]uint{
+	votes := map[string]uint32{
 		"Up":    gs.UpVotes,
 		"Down":  gs.DownVotes,
 		"Left":  gs.LeftVotes,
@@ -98,9 +108,9 @@ func (gs *GameState) getLargestVote() (uint, string) {
 	}
 
 	// Iterate to find the largest vote
-	var largestVote uint
+	var largestVote uint32
 	// default direction
-	var direction string = "Right"
+	var direction string = gs.LastDirection
 	for dir, vote := range votes {
 		if vote > largestVote {
 			largestVote = vote
@@ -108,7 +118,25 @@ func (gs *GameState) getLargestVote() (uint, string) {
 		}
 	}
 
+	gs.LastDirection = direction
+
 	return largestVote, direction
+}
+
+func (gs *GameState) MoveUp() {
+	atomic.AddUint32(&gs.UpVotes, 1)
+}
+
+func (gs *GameState) MoveDown() {
+	atomic.AddUint32(&gs.DownVotes, 1)
+}
+
+func (gs *GameState) MoveRight() {
+	atomic.AddUint32(&gs.RightVotes, 1)
+}
+
+func (gs *GameState) MoveLeft() {
+	atomic.AddUint32(&gs.LeftVotes, 1)
 }
 
 func (gs *GameState) MoveSnake() {
