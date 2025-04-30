@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"time"
 )
@@ -13,7 +14,7 @@ type Coordinate struct {
 }
 
 const (
-	RefreshRate     time.Duration = 500 * time.Millisecond
+	RefreshRate     time.Duration = 50 * time.Millisecond
 	InputSampleRate time.Duration = 50 * time.Millisecond
 )
 
@@ -49,6 +50,11 @@ const rows, cols = 40, 120
 
 func init() {
 
+	fruitInit := new(Coordinate)
+	fruitInit.Character = '$'
+	fruitInit.Row = 10
+	fruitInit.Col = 40
+
 	snakeInit := make([]Coordinate, 1)
 	snakeInit[0] = Coordinate{
 		Row:       20,
@@ -60,6 +66,7 @@ func init() {
 		Content:       make([][]rune, rows),
 		Snake:         snakeInit,
 		LastDirection: "Up",
+		Fruit:         *fruitInit,
 	}
 
 	for i := range SingleGameState.Content {
@@ -83,7 +90,63 @@ func init() {
 	SingleGameState.updateContent()
 }
 
+func (gs *GameState) RandomRowAndCol() (int, int) {
+	if len(gs.Snake) == (rows-2)*(cols-2) {
+		snakeInit := make([]Coordinate, 1)
+		snakeInit[0] = Coordinate{
+			Row:       20,
+			Col:       20,
+			Character: '▇',
+		}
+		gs.Snake = snakeInit
+
+		return rows / 2, cols / 2
+	}
+
+	var row int
+	var col int
+
+	for {
+		row = rand.Intn(rows - 2)
+		if row == 0 {
+			row += 1
+		}
+		// check if the snake body is not already there
+		validRow := true
+		for _, sbody := range gs.Snake {
+			if sbody.Row == row {
+				validRow = false
+			}
+		}
+		if validRow {
+			break
+		}
+	}
+
+	for {
+		col = rand.Intn(cols - 2)
+		if col == 0 {
+			col += 1
+		}
+		// check if the snake body is not already there
+		validCol := true
+		for _, sbody := range gs.Snake {
+			if sbody.Col == col {
+				validCol = false
+			}
+		}
+		if validCol {
+			break
+		}
+	}
+
+	return row, col
+}
+
 func (gs *GameState) updateContent() {
+
+	// add fruit on the grid
+	gs.Content[gs.Fruit.Row][gs.Fruit.Col] = gs.Fruit.Character
 
 	// Update the grid with snake positions
 	for _, pos := range gs.Snake {
@@ -105,6 +168,23 @@ func (gs *GameState) getLargestVote() (uint32, string) {
 		"Down":  gs.DownVotes,
 		"Left":  gs.LeftVotes,
 		"Right": gs.RightVotes,
+	}
+
+	// if the snake is moving up it cannot go down suddenly, so when last direction is up down votes are to be ignore
+	if gs.LastDirection == "Up" {
+		votes["Down"] = 0
+	}
+
+	if gs.LastDirection == "Down" {
+		votes["Up"] = 0
+	}
+
+	if gs.LastDirection == "Right" {
+		votes["Left"] = 0
+	}
+
+	if gs.LastDirection == "Left" {
+		votes["Right"] = 0
 	}
 
 	// Iterate to find the largest vote
@@ -146,23 +226,42 @@ func (gs *GameState) MoveSnake() {
 
 	currentHead := gs.Snake[0]
 	if direction == "Right" {
+		// we will make the snake come out of the other side
+		nextCol := currentHead.Col + 1
+		if nextCol >= cols-1 {
+			nextCol = 1
+		}
 		newHead = Coordinate{
 			Row: currentHead.Row,
-			Col: currentHead.Col + 1,
+			Col: nextCol,
 		}
 	} else if direction == "Left" {
+
+		nextCol := currentHead.Col - 1
+		if nextCol <= 0 {
+			nextCol = cols - 2
+		}
+
 		newHead = Coordinate{
 			Row: currentHead.Row,
-			Col: currentHead.Col - 1,
+			Col: nextCol,
 		}
 	} else if direction == "Up" {
+		nextRow := currentHead.Row - 1
+		if nextRow <= 0 {
+			nextRow = rows - 2
+		}
 		newHead = Coordinate{
-			Row: currentHead.Row - 1,
+			Row: nextRow,
 			Col: currentHead.Col,
 		}
 	} else if direction == "Down" {
+		nextRow := currentHead.Row + 1
+		if nextRow >= rows-1 {
+			nextRow = 1
+		}
 		newHead = Coordinate{
-			Row: currentHead.Row + 1,
+			Row: nextRow,
 			Col: currentHead.Col,
 		}
 	}
@@ -170,12 +269,19 @@ func (gs *GameState) MoveSnake() {
 	// Add the new head to the front of the snake
 	gs.Snake = append([]Coordinate{newHead}, gs.Snake...)
 
-	// Remove the last block of the snake to maintain its size
-	// clear the tail character
-	lengthOfSnake := len(gs.Snake)
-	tailOfSnake := gs.Snake[lengthOfSnake-1]
-	gs.Content[tailOfSnake.Row][tailOfSnake.Col] = ' '
-	gs.Snake = gs.Snake[:lengthOfSnake-1]
+	// check if the fruit is at the new snake head
+	if gs.Fruit.Row == newHead.Row && gs.Fruit.Col == newHead.Col {
+		fruitRow, fruitCol := gs.RandomRowAndCol()
+		gs.Fruit.Row = fruitRow
+		gs.Fruit.Col = fruitCol
+	} else {
+		// Remove the last block of the snake to maintain its size
+		// clear the tail character
+		lengthOfSnake := len(gs.Snake)
+		tailOfSnake := gs.Snake[lengthOfSnake-1]
+		gs.Content[tailOfSnake.Row][tailOfSnake.Col] = ' '
+		gs.Snake = gs.Snake[:lengthOfSnake-1]
+	}
 
 }
 

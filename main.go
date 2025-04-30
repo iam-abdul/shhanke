@@ -65,6 +65,5 @@ func main() {
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 
 	// fmt.Println("here in tea handler ", s.Context().SessionID())
-
 	return model.TestMultiplayer{}, []tea.ProgramOption{tea.WithAltScreen()}
 }
